@@ -1099,6 +1099,29 @@ fn enable_installs_the_early_start_and_disable_removes_it_again() {
     assert_eq!(f.filters.borrow().len(), 2);
 }
 #[test]
+fn manifest_enable_installs_the_early_start_and_disable_removes_it_and_the_boot_marker() {
+    let f = Fixture::new();
+    f.put("/etc/starfish-release", b"Rockhopper release 11.2.0-3701");
+    home::dispatch(&f, "enable", Some(DIR), None).unwrap();
+    assert_eq!(home::load(&f).unwrap().unwrap().method, "manifest");
+    assert_eq!(f.read("/var/lib/luma-home/luma-early"), b"native-early");
+    assert!(system::exists(&f, LS2_SERVICE));
+    assert_eq!(ours(&f), 1);
+    let status = home::dispatch(&f, "status", None, None).unwrap();
+    assert_eq!(status["earlyStart"], true);
+    // `home.sh early` took over Home in this boot.
+    f.put("/var/run/luma-home-early", b"manifest\n");
+    home::dispatch(&f, "disable", None, None).unwrap();
+    assert!(!system::exists(&f, LS2_SERVICE));
+    assert!(!system::exists(&f, "/var/lib/luma-home/luma-early"));
+    assert!(!system::exists(&f, "/var/run/luma-home-early"));
+    assert_eq!(ours(&f), 0);
+    assert_eq!(
+        system::json(&f, "/usr/palm/applications/com.webos.app.home/appinfo.json").unwrap()["main"],
+        format!("file://{EXE}")
+    );
+}
+#[test]
 fn a_failed_early_install_still_leaves_luma_as_home() {
     let f = Fixture::new();
     f.fail_ls_control.set(true);

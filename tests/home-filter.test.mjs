@@ -64,8 +64,30 @@ test('luma-early is asked again on a timer until it answers', () => {
   tv.timers[0][1]();
   assert.equal(tv.prepares.length, 2);
   tv.early(true);
-  tv.timers.find(([ms]) => ms === 1500)[1]();
+  tv.timers.find(([ms]) => ms === 250)[1]();
   assert.equal(tv.prepares.length, 2);
+});
+
+test('boot status updates do not start more retry timers', () => {
+  const tv = compositor();
+  tv.boot(false);
+  tv.boot(false);
+  tv.boot(false);
+  assert.equal(tv.prepares.length, 1);
+  assert.equal(tv.timers.filter(([ms]) => ms === 250).length, 1);
+  tv.timers[0][1]();
+  assert.equal(tv.prepares.length, 2);
+  assert.equal(tv.timers.filter(([ms]) => ms === 250).length, 2);
+});
+
+test('luma-early is asked for at most 45 s', () => {
+  const tv = compositor();
+  tv.boot(false);
+  for (let i = 0; i < 400; i++) {
+    const retry = tv.timers.filter(([ms]) => ms === 250).at(-1);
+    retry[1]();
+  }
+  assert.equal(tv.prepares.length, 180);
 });
 
 test('a failed mount leaves the boot to the Homebrew hook', () => {

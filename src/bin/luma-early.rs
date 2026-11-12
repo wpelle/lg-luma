@@ -1,14 +1,17 @@
-//! Early Home helper for the webOS 5/6 executable Home method.
+//! Early Home helper for both Home methods.
 //!
-//! LG's Homebrew init.d hooks run only ~50 s into a cold boot, so `home.sh boot` mounts Luma over
-//! LG's Home executable long after the TV showed Live TV and LG's Home. ls-hubd, however, reads
-//! the LS2 definitions in /var/luna-service2 at core-boot-done (snapshot-resume-jobs:
-//! `ls-control scan-volatile-dirs`, ~17 s) and starts dynamic services as root. `home.sh enable`
-//! registers this program there as `com.webos.service.lumahome`; the compositor key filter
-//! (`home-filter.js`) calls its one method while the TV boots and opens Home once it succeeded.
+//! LG's Homebrew init.d hooks run only ~50 s into a cold boot, so `home.sh boot` takes over Home
+//! long after the TV showed Live TV or LG's Home. ls-hubd, however, reads the LS2 definitions in
+//! /var/luna-service2 when the boot snapshot resumes (`ls-control scan-volatile-dirs`: ~17 s at
+//! core-boot-done on webOS 5.6, ~12 s in snapshot-boot-resume on a webOS 26 C3) and starts
+//! dynamic services as root. `home.sh enable` registers this program there as
+//! `com.webos.service.lumahome`; the compositor key filter (`home-filter.js`) calls its one method
+//! while the TV boots and opens Home once it succeeded.
 //!
-//! `/prepare` runs `home.sh early` (mount, marker, stop LG's Home; nothing is launched) and
-//! answers `{"returnValue": bool, "exitCode": n}`. It takes no parameters and answers only the
+//! `/prepare` runs `home.sh early` and answers `{"returnValue": bool, "exitCode": n}`. On webOS
+//! 5/6/24 that mounts Luma over LG's Home executable and stops LG's Home, launching nothing. On
+//! webOS 25/26 it mounts the staged manifest and has SAM reread it, before bootd's first launch of
+//! Home if it can; an LG Home already running is stopped and Home launched again. It takes no parameters and answers only the
 //! key filter. The process exits 15 s after the last request; a new call starts it again.
 
 // The SDK's libc lacks getauxval, which Rust's startup needs (as for the main binary).

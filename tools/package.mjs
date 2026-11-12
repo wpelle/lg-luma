@@ -20,7 +20,7 @@ if (
   );
 }
 const binary = path.join(root, 'target/armv7-unknown-linux-gnueabi/release/luma');
-// Early Home helper for the webOS 5/6 Home integration (src/bin/luma-early.rs).
+// Early cold-boot Home helper for the Home integration (src/bin/luma-early.rs).
 const earlyBinary = path.join(root, 'target/armv7-unknown-linux-gnueabi/release/luma-early');
 for (const file of [binary, earlyBinary]) {
   const bytes = await fs.readFile(file);

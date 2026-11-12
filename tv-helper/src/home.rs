@@ -11,11 +11,14 @@ const CONFIG: &str = "/var/lib/luma-home/state.json";
 const STAGE: &str = "/var/lib/luma-home/app";
 const HOOK: &str = "/var/lib/webosbrew/init.d/64-luma-home";
 const MARKER: &str = "/var/run/luma-home";
+// Written by `home.sh early` once the manifest method's early start took over Home in this boot.
+const EARLY_MARKER: &str = "/var/run/luma-home-early";
 pub const HOME: &str = "com.webos.app.home";
 pub const FULL_HOME: &str = "com.webos.app.fullhome";
-// Early cold-boot start for the executable method (src/bin/luma-early.rs, home-filter.js). ls-hubd
-// reads these volatile LS2 directories at core-boot-done and starts dynamic services as root, so
-// the compositor key filter can have Luma mounted ~30 s before the Homebrew hook runs.
+// Early cold-boot start for both methods (src/bin/luma-early.rs, home-filter.js). ls-hubd reads
+// these volatile LS2 directories when the boot snapshot resumes (snapshot-boot-resume, ~12 s on a
+// webOS 26 C3; at core-boot-done, ~17 s, on webOS 5.6) and starts dynamic services as root, so the
+// compositor key filter can have Luma take over Home ~40 s before the Homebrew hook runs.
 pub const EARLY: &str = "com.webos.service.lumahome";
 // A copy beside home.sh: ls-hubd treats programs under /media/developer as developer-mode
 // services and does not deliver the system key filter's calls to them.
@@ -445,9 +448,7 @@ impl<'a, S: System> Home<'a, S> {
     pub fn disable(&self, config: &mut Config) -> Result<()> {
         config.enabled = false;
         system::write_json(self.system, CONFIG, &*config)?;
-        if config.method == "executable" {
-            self.remove_early();
-        }
+        self.remove_early();
         let restored = self.restore(config);
         if hook_owned(self.system) {
             system::remove(self.system, HOOK)?;
@@ -462,6 +463,7 @@ impl<'a, S: System> Home<'a, S> {
                 false
             }
         };
+        system::remove(self.system, EARLY_MARKER)?;
         if config.method == "executable" {
             let root = self.owned_mount()?;
             system::remove(self.system, MARKER)?;
@@ -694,9 +696,7 @@ impl<'a, S: System> Home<'a, S> {
         self.apply(&config, true)?;
         config.enabled = true;
         system::write_json(self.system, CONFIG, &config)?;
-        if config.method == "executable" {
-            self.install_early(&app);
-        }
+        self.install_early(&app);
         Ok(())
     }
 }
@@ -784,7 +784,7 @@ pub fn dispatch(
     let home = Home::new(system, id)?;
     match command {
         "status" => Ok(
-            json!({"enabled":saved.as_ref().is_some_and(|c|c.enabled),"method":saved.as_ref().map(|c|c.method.as_str()),"homeId":id,"homeKeyVerified":null,"availableTargets":([HOME,FULL_HOME].into_iter().filter(|id|home.exists(format!("/usr/palm/applications/{id}/appinfo.json"))).collect::<Vec<_>>()),"mounted":saved.as_ref().is_some_and(|c|if c.method=="executable"{home.exe_mounted(&c.app_dir)}else{home.mounted()}),"bootHook":hook_owned(system),"earlyStart":saved.as_ref().is_some_and(|c|c.method=="executable")&&home.exists(format!("{LS2}/services.d/{EARLY}.service")),"appDir":saved.as_ref().map(|c|c.app_dir.as_str())}),
+            json!({"enabled":saved.as_ref().is_some_and(|c|c.enabled),"method":saved.as_ref().map(|c|c.method.as_str()),"homeId":id,"homeKeyVerified":null,"availableTargets":([HOME,FULL_HOME].into_iter().filter(|id|home.exists(format!("/usr/palm/applications/{id}/appinfo.json"))).collect::<Vec<_>>()),"mounted":saved.as_ref().is_some_and(|c|if c.method=="executable"{home.exe_mounted(&c.app_dir)}else{home.mounted()}),"bootHook":hook_owned(system),"earlyStart":saved.is_some()&&home.exists(format!("{LS2}/services.d/{EARLY}.service")),"appDir":saved.as_ref().map(|c|c.app_dir.as_str())}),
         ),
         "enable" => {
             home.install(Path::new(app.ok_or("Missing installation directory")?))?;
